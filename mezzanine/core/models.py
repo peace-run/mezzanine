@@ -574,16 +574,25 @@ class ContentTyped(models.Model):
         Return the name of the OneToOneField django automatically creates for
         child classes in multi-table inheritance.
         """
-        return cls._meta.object_name.lower()
+        # return cls._meta.object_name.lower()
+        chain = []
+        parents = cls._meta.get_base_chain(cls)
+        if parents:
+            parents = reversed(parents[:-1])
+            chain = [p._meta.object_name.lower() for p in parents]
+        chain.append(cls._meta.object_name.lower())
+        return '.'.join(chain)
 
     @classmethod
     def get_content_models(cls):
         """ Return all subclasses of the concrete model.  """
         concrete_model = base_concrete_model(ContentTyped, cls)
+        subs = concrete_model.__subclasses__()
         return [
             m
             for m in apps.get_models()
-            if m is not concrete_model and issubclass(m, concrete_model)
+            if m in subs
+            # if m is not concrete_model and issubclass(m, concrete_model)
         ]
 
     def set_content_model(self):
@@ -601,7 +610,14 @@ class ContentTyped(models.Model):
         """
         Return content model, or if this is the base class return it.
         """
-        return getattr(self, self.content_model) if self.content_model else self
+        chain = self.content_model.split('.')
+        model = self
+        for content_model in chain:
+            model = getattr(model, content_model, None)
+            if model is None:
+                break
+        return model
+        # return getattr(self, self.content_model) if self.content_model else self
 
 
 class SitePermission(models.Model):
